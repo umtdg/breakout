@@ -1,4 +1,4 @@
-#include <asm-generic/errno-base.h>
+#include <errno.h>
 #include <inttypes.h>
 #include <raylib.h>
 #include <raymath.h>
@@ -6,7 +6,47 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+
+#if defined(__SSE__) || defined(__x86_64__) || defined(_M_X64) || defined(_M_IX86)
 #include <xmmintrin.h>
+
+static inline float RSqrt(float x) {
+    __m128 a = _mm_set_ss(x);
+    float res = 0.0f;
+
+    a = _mm_rsqrt_ss(a);
+    _mm_store_ss(&res, a);
+
+    return res;
+}
+
+static inline void Normalize2(Vector2 *vec) {
+    if (vec == NULL) return;
+
+    float rsqrt = RSqrt(vec->x * vec->x + vec->y * vec->y);
+    vec->x *= rsqrt;
+    vec->y *= rsqrt;
+}
+#elif defined(__ARM_NEON) || defined(__aarch64__)
+#include <arm_neon.h>
+
+static inline float RSqrt(float x) {
+    float32x2_t a = vdup_n_f32(x);
+    a = vrsqrte_f32(a);
+
+    return vget_lane_f32(a, 0);
+}
+
+static inline void Normalize2(Vector2 *vec) {
+    if (vec == NULL) return;
+
+    float rsqrt = RSqrt(vec->x * vec->x + vec->y * vec->y);
+    vec->x *= rsqrt;
+    vec->y *= rsqrt;
+}
+#else
+#include <math.h>
+#endif
 
 #define CIRCLE_RECT_COLLISION_EPSILON 0.000001f
 
@@ -32,24 +72,6 @@
 #define BRICK_VCOUNT 8
 #define BRICK_COLOR LIGHTGRAY
 #define BRICK_COLOR_ALT DARKGRAY
-
-static inline float RSqrt(float x) {
-    __m128 a = _mm_set_ss(x);
-    float res = 0.0f;
-
-    a = _mm_rsqrt_ss(a);
-    _mm_store_ss(&res, a);
-
-    return res;
-}
-
-static inline void Normalize2(Vector2 *vec) {
-    if (vec == NULL) return;
-
-    float rsqrt = RSqrt(vec->x * vec->x + vec->y * vec->y);
-    vec->x *= rsqrt;
-    vec->y *= rsqrt;
-}
 
 typedef struct GameState {
     bool gameOver;
