@@ -9,3 +9,4 @@ edition = "2024"
 
 [workspace.dependencies]
 bevy = "0.19"
+avian2d = "0.7.0"
