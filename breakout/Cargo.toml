@@ -7,3 +7,7 @@ edition.workspace = true
 [dependencies]
 bevy = { workspace = true }
 avian2d = { workspace = true }
+
+[features]
+default = ["dev"]
+dev = ["bevy/dev", "bevy/dynamic_linking"]
