@@ -3,7 +3,9 @@ use avian2d::debug_render::PhysicsDebugPlugin;
 use avian2d::{
     PhysicsPlugins,
     collision::collider::Collider,
-    dynamics::rigid_body::{LinearVelocity, RigidBody},
+    dynamics::rigid_body::{
+        CoefficientCombine, GravityScale, LinearVelocity, LockedAxes, Restitution, RigidBody,
+    },
     math::AdjustPrecision,
     physics_transform::Position,
 };
@@ -20,6 +22,7 @@ use bevy::{
         system::{Commands, Res, ResMut, Single},
     },
     input::{ButtonInput, keyboard::KeyCode},
+    log,
     math::{
         Vec2,
         primitives::{Circle, Rectangle},
@@ -59,9 +62,8 @@ fn spawn_paddle(
 }
 
 fn handle_player_input(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
     mut paddle_velocity: Single<&mut LinearVelocity, (With<Paddle>, Without<Ball>)>,
-    ball_and_velocity: Single<(&mut Ball, &mut LinearVelocity)>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
 ) {
     let mut input = Vec2::ZERO;
     if keyboard_input.pressed(KeyCode::ArrowLeft) {
@@ -75,31 +77,11 @@ fn handle_player_input(
     input *= PADDLE_SPEED;
     input = input.adjust_precision();
     paddle_velocity.0 = input;
-
-    let (mut ball, mut ball_velocity) = ball_and_velocity.into_inner();
-    if ball.attach_to_paddle {
-        ball_velocity.0 = input;
-    }
-
-    if keyboard_input.pressed(KeyCode::Space) {
-        ball.attach_to_paddle = false;
-        ball_velocity.0 = Vec2::Y * BALL_SPEED;
-    }
 }
 
 #[derive(Component)]
 #[require(Position, LinearVelocity)]
-struct Ball {
-    attach_to_paddle: bool,
-}
-
-impl Default for Ball {
-    fn default() -> Self {
-        Self {
-            attach_to_paddle: true,
-        }
-    }
-}
+struct Ball;
 
 fn spawn_ball(
     mut commands: Commands,
@@ -111,24 +93,23 @@ fn spawn_ball(
     let material = materials.add(Color::srgb_u8(0x00, 0xff, 0xff));
 
     commands.spawn((
-        Ball::default(),
+        Ball,
         Mesh2d(mesh),
         MeshMaterial2d(material),
-        RigidBody::Kinematic,
         Collider::from(shape),
+        RigidBody::Dynamic,
+        Restitution::PERFECTLY_ELASTIC.with_combine_rule(CoefficientCombine::Max),
+        GravityScale(0.0),
+        LockedAxes::ROTATION_LOCKED,
     ));
 }
 
-fn attach_ball_to_paddle(
-    ball_and_pos: Single<(&Ball, &mut Position), Without<Paddle>>,
-    paddle_position: Single<&Position, With<Paddle>>,
+fn log_positions(
+    paddle_position: Single<&Position, (With<Paddle>, Without<Ball>)>,
+    ball_position: Single<&Position, With<Ball>>,
 ) {
-    let (ball, mut ball_position) = ball_and_pos.into_inner();
-    if !ball.attach_to_paddle {
-        return;
-    }
-
-    ball_position.0 = Vec2::new(paddle_position.x, paddle_position.y + 10.0 + 10.0 + 5.0);
+    log::info!("Paddle position: {}", paddle_position.0);
+    log::info!("Ball position: {}", ball_position.0);
 }
 
 fn spawn_walls(mut commands: Commands, window: Single<&Window>) {
@@ -194,10 +175,7 @@ pub fn main() -> AppExit {
     );
 
     // Fixed update systems
-    app.add_systems(
-        FixedUpdate,
-        (handle_player_input, attach_ball_to_paddle).chain(),
-    );
+    app.add_systems(FixedUpdate, (handle_player_input, log_positions).chain());
 
     app.run()
 }
